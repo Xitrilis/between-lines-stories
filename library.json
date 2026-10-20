@@ -1,0 +1,112 @@
+{
+  "schema": 1,
+  "chapters": [
+    {
+      "id": "first-message",
+      "title": "Когда город засыпает",
+      "description": "Одно сообщение может изменить весь вечер.",
+      "pageSize": 7,
+      "avatarMode": "header",
+      "unlockAt": "",
+      "people": {
+        "left": {
+          "name": "Саша",
+          "avatar": "",
+          "color": "#E9EBEF"
+        },
+        "right": {
+          "name": "Аня",
+          "avatar": "",
+          "color": "#006DDB"
+        }
+      },
+      "messages": [
+        {
+          "id": "demo-0",
+          "side": "left",
+          "text": "Ты ещё не спишь?",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-1",
+          "side": "right",
+          "text": "Смотря кто спрашивает.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-2",
+          "side": "left",
+          "text": "Человек, который полчаса выбирал, что тебе написать.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-3",
+          "side": "right",
+          "text": "И выбрал «ты не спишь»?",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-4",
+          "side": "left",
+          "text": "У меня был план получше.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-5",
+          "side": "right",
+          "text": "Расскажешь?",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-6",
+          "side": "left",
+          "text": "Посмотри в окно.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-7",
+          "side": "right",
+          "text": "Ты серьёзно сейчас стоишь под дождём?",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-8",
+          "side": "left",
+          "text": "Вообще-то я стою под зонтом.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-9",
+          "side": "right",
+          "text": "С двумя стаканами кофе?",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-10",
+          "side": "left",
+          "text": "Один — повод. Второй — для тебя.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-11",
+          "side": "right",
+          "text": "Дай мне пять минут.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-12",
+          "side": "left",
+          "text": "Я бы и дольше подождал.",
+          "breakBefore": false
+        },
+        {
+          "id": "demo-13",
+          "side": "right",
+          "text": "Я знаю. Поэтому спускаюсь.",
+          "breakBefore": false
+        }
+      ]
+    }
+  ],
+  "updatedAt": "2026-10-20T21:07:53.385Z"
+}

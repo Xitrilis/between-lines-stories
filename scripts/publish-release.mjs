@@ -4,13 +4,14 @@ import {execFileSync} from 'node:child_process';
 import {githubRequest,publishChapter} from '../shared/github.mjs';
 import {demo} from '../shared/story.mjs';
 const gh=process.argv[2]||'gh';
-const run=(command,args)=>execFileSync(command,args,{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']}).trim();
-let token;try{token=run(gh,['auth','token'])}catch{throw new Error('Сначала войдите в GitHub CLI: gh auth login')}
+let token;
+const run=(command,args)=>execFileSync(command,args,{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe'],env:{...process.env,GH_TOKEN:token,GITHUB_TOKEN:token}}).trim();
+try{token=execFileSync(gh,['auth','token'],{encoding:'utf8',windowsHide:true,stdio:['ignore','pipe','pipe']}).trim()}catch{throw new Error('Сначала войдите в GitHub CLI: gh auth login')}
 const account=await githubRequest('/user',{token});
 const channel=JSON.parse(await fs.readFile('channel.json','utf8'));
 if(account.login.toLowerCase()!==channel.owner.toLowerCase())throw new Error(`Канал принадлежит ${channel.owner}, а вход выполнен как ${account.login}. Сначала выполните scripts/channel.mjs для нужного аккаунта и пересоберите установщик.`);
 try{await githubRequest(`/repos/${channel.owner}/${channel.repo}`,{token})}catch(error){if(error.status!==404)throw error;await githubRequest('/user/repos',{token,method:'POST',body:{name:channel.repo,description:'Между строк — Windows reader and editor for chat stories',private:false,auto_init:false}});console.log('Public repository created')}
-run(gh,['auth','setup-git','--hostname','github.com']);
+try{run(gh,['auth','setup-git','--hostname','github.com','--force'])}catch{}
 const expected=`https://github.com/${channel.owner}/${channel.repo}.git`;
 let remote;try{remote=run('git',['remote','get-url','origin'])}catch{run('git',['remote','add','origin',expected]);remote=expected}
 if(remote!==expected)throw new Error('origin указывает на другой репозиторий. Публикация остановлена.');

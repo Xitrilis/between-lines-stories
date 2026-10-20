@@ -14,6 +14,8 @@ async function channel(){return await read('channel.json',bundled)}
 function guarded(name,handler){ipcMain.handle(name,async(event,...args)=>{if(event.sender!==window.webContents)throw new Error('Unknown sender');try{return {ok:true,value:await handler(...args)}}catch(e){return {ok:false,error:e.message||'Операция не выполнена.'}}})}
 async function getToken(){try{return safeStorage.decryptString(await fs.readFile(file('github.secret')))}catch{return null}}
 async function storeToken(token){if(!safeStorage.isEncryptionAvailable())throw new Error('Windows не предоставляет защищённое хранилище ключей.');await fs.mkdir(app.getPath('userData'),{recursive:true});await fs.writeFile(file('github.secret'),safeStorage.encryptString(token));}
+async function getGeminiKey(){try{return safeStorage.decryptString(await fs.readFile(file('gemini.secret')))}catch{return process.env.GEMINI_API_KEY||null}}
+async function storeGeminiKey(key){if(!safeStorage.isEncryptionAvailable())throw new Error('Windows не предоставляет защищённое хранилище ключей.');await fs.mkdir(app.getPath('userData'),{recursive:true});if(!key){await fs.rm(file('gemini.secret'),{force:true});return;}await fs.writeFile(file('gemini.secret'),safeStorage.encryptString(key));}
 async function credentialToken(){return new Promise((resolve,reject)=>{
  const child=execFile('git',['credential','fill'],{env:{...process.env,GCM_INTERACTIVE:'Never',GIT_TERMINAL_PROMPT:'0'},windowsHide:true,timeout:10000},(error,stdout)=>{if(error)return reject(new Error('Войдите в GitHub через Git Credential Manager или добавьте ключ в настройках.'));const token=stdout.split(/\r?\n/).find(s=>s.startsWith('password='))?.slice(9);token?resolve(token):reject(new Error('GitHub не подключён.'))});child.stdin.end('protocol=https\nhost=github.com\n\n');
 })}
@@ -34,7 +36,11 @@ async function setupUpdater(){
 app.whenReady().then(async()=>{
  const {demo,validateLibrary,validateChapter}=await import('../shared/story.mjs');
  const {checkChannel,fetchLibrary,publishChapter,githubRequest}=await import('../shared/github.mjs');
- guarded('bootstrap',async()=>({library:await read('library.json',demo),workspace:await read('workspace.json',null),channel:await channel(),connected:!!await getToken(),version:app.getVersion(),progress:await read('progress.json',{}),update:updateState}));
+ const {generateNewChapter,continueChapter}=await import('../shared/gemini.mjs');
+ guarded('bootstrap',async()=>({library:await read('library.json',demo),workspace:await read('workspace.json',null),channel:await channel(),connected:!!await getToken(),hasGeminiKey:!!await getGeminiKey(),version:app.getVersion(),progress:await read('progress.json',{}),update:updateState}));
+ guarded('set-gemini-key',async key=>{const trimmed=key?.trim();await storeGeminiKey(trimmed);return !!trimmed});
+ guarded('ai-generate-chapter',async({prompt,count,apiKey})=>{const activeKey=apiKey?.trim()||await getGeminiKey();if(!activeKey)throw new Error('Укажите API-ключ Gemini.');if(apiKey?.trim()&&!await getGeminiKey()){await storeGeminiKey(apiKey.trim())}return await generateNewChapter({apiKey:activeKey,prompt,count})});
+ guarded('ai-continue-chapter',async({chapter,prompt,count,apiKey})=>{const activeKey=apiKey?.trim()||await getGeminiKey();if(!activeKey)throw new Error('Укажите API-ключ Gemini.');if(apiKey?.trim()&&!await getGeminiKey()){await storeGeminiKey(apiKey.trim())}return await continueChapter({apiKey:activeKey,chapter,prompt,count})});
  guarded('save-workspace',async data=>{if(JSON.stringify(data).length>24_000_000)throw new Error('Слишком большой проект.');await write('workspace.json',data);return true});
  guarded('save-progress',async data=>{await write('progress.json',data);return true});
  guarded('refresh',async()=>{const library=await fetchLibrary(await channel());await write('library.json',library);return library});

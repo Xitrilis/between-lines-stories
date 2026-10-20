@@ -54,6 +54,11 @@ try{
  await page.getByText('Сначала подключите GitHub в настройках.',{exact:true}).waitFor();
  await page.getByRole('button',{name:'Закрыть уведомление'}).click();
  await page.getByText('Сохранено на компьютере',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'AI-соавтор'}).click();
+ await page.getByText('AI-соавтор (Gemini)',{exact:true}).waitFor();
+ await page.locator('.modal-card').getByRole('button',{name:'Новая глава'}).click();
+ assert.ok(await page.getByText('О чём будет история?').isVisible());
+ await page.getByRole('button',{name:'Закрыть окно'}).click();
  await page.screenshot({path:path.join(directory,'editor.png')});
  const saved=JSON.parse(await fs.readFile(path.join(profile,'workspace.json'),'utf8'));
  assert.equal(saved.chapters[0].title,'Проверенная история');assert.equal(saved.chapters[0].people.right.color,'#7429a8');assert.match(saved.chapters[0].people.right.avatar,/^data:image\/png;base64,/);

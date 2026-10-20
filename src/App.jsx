@@ -1,5 +1,5 @@
 import React,{useState,useEffect,useRef} from 'react';
-import {BookOpen,PenLine,Settings,ChevronLeft,ChevronRight,Plus,Upload,RefreshCw,ArrowLeft,ArrowUp,ArrowDown,Trash2,ImagePlus,Check,Clock3,LockKeyhole,Download,MessageCircle,Eye,Columns2,Rows3,X,Scissors,FolderOpen,CheckCheck,Send,Heart} from 'lucide-react';
+import {BookOpen,PenLine,Settings,ChevronLeft,ChevronRight,Plus,Upload,RefreshCw,ArrowLeft,ArrowUp,ArrowDown,Trash2,ImagePlus,Check,Clock3,LockKeyhole,Download,MessageCircle,Eye,Columns2,Rows3,X,Scissors,FolderOpen,CheckCheck,Send,Heart,Sparkles,Wand2,Bot,KeyRound} from 'lucide-react';
 import {api} from './api';
 import {demo,pagesOf,isLocked,newChapter,uid,validateChapter,mergeChapter,textColor} from '../shared/story.mjs';
 
@@ -55,9 +55,106 @@ function Library({library,now,progress,onOpen,onEditor,onRefresh,busy,hasChannel
  <footer className="library-footer"><span>У каждого сообщения есть продолжение.</span><button className="text-button" onClick={onEditor}><PenLine size={15}/> Написать своё</button></footer></section>
 }
 async function readAvatar(file){if(!file)return '';if(!['image/png','image/jpeg','image/webp'].includes(file.type))throw new Error('Выберите PNG, JPEG или WebP.');if(file.size>10_000_000)throw new Error('Выберите картинку меньше 10 МБ.');const url=URL.createObjectURL(file);try{const img=new Image();img.src=url;await img.decode();const canvas=document.createElement('canvas');canvas.width=256;canvas.height=256;const ctx=canvas.getContext('2d');const size=Math.min(img.width,img.height);ctx.drawImage(img,(img.width-size)/2,(img.height-size)/2,size,size,0,0,256,256);return canvas.toDataURL('image/png')}finally{URL.revokeObjectURL(url)}}
-function Editor({chapters,setChapters,onPublish,onPreview,onImport,onExport,busy,notify,saveStatus}){
+function AiModal({isOpen,onClose,initialTab='new',chapter,chapters,setChapters,setSelected,hasGeminiKey,onGeminiKeySaved,notify}){
+ const [tab,setTab]=useState(initialTab);
+ const [prompt,setPrompt]=useState('');
+ const [apiKey,setApiKey]=useState('');
+ const [count,setCount]=useState(10);
+ const [loading,setLoading]=useState(false);
+ const [error,setError]=useState('');
+ useEffect(()=>{if(isOpen){setTab(initialTab);setError('')}},[isOpen,initialTab]);
+ const chips=['Случайная встреча под дождём','Загадочное сообщение в 3 часа ночи','Спор о редкой книге','Старые друзья спустя 5 лет','Признание в чувствах между строк'];
+ async function handleGenerate(){
+  setLoading(true);setError('');
+  try{
+   if(!hasGeminiKey&&!apiKey.trim())throw new Error('Введите API-ключ Gemini.');
+   if(tab==='new'){
+    const newChap=await api.aiGenerateChapter({prompt,count,apiKey:apiKey.trim()||undefined});
+    if(apiKey.trim()&&!hasGeminiKey)onGeminiKeySaved();
+    setChapters(prev=>[...prev,newChap]);
+    setSelected(newChap.id);
+    notify(`AI создал главу «${newChap.title}»`);
+    onClose();
+   }else{
+    if(!chapter)throw new Error('Выберите главу для продолжения.');
+    const added=await api.aiContinueChapter({chapter,prompt,count,apiKey:apiKey.trim()||undefined});
+    if(apiKey.trim()&&!hasGeminiKey)onGeminiKeySaved();
+    const nextMessages=[...chapter.messages,...added];
+    setChapters(prev=>prev.map(c=>c.id===chapter.id?{...c,messages:nextMessages}:c));
+    notify(`AI дописал ${added.length} реплик`);
+    onClose();
+   }
+  }catch(err){setError(err.message||'Не удалось сгенерировать историю.')}
+  finally{setLoading(false)}
+ }
+ if(!isOpen)return null;
+ return <div className="modal-backdrop" onClick={e=>{if(e.target===e.currentTarget&&!loading)onClose()}}>
+  <div className="modal-card">
+   <header className="modal-header">
+    <h2><Sparkles size={19} className="sparkle-icon"/> AI-соавтор (Gemini)</h2>
+    <IconButton label="Закрыть окно" disabled={loading} onClick={onClose}><X size={17}/></IconButton>
+   </header>
+   <div className="modal-body">
+    {!hasGeminiKey&&<div className="api-key-banner">
+     <div className="key-banner-head"><KeyRound size={16}/><span>Подключение Gemini API</span></div>
+     <p>Для генерации введи API-ключ Gemini (бесплатно в Google AI Studio). Ключ сохранится зашифрованным в Windows.</p>
+     <input type="password" autoComplete="off" placeholder="Вставь API-ключ: AIzaSy..." value={apiKey} onChange={e=>setApiKey(e.target.value)}/>
+     <small><a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Получить ключ в Google AI Studio ↗</a></small>
+    </div>}
+    <div className="segmented modal-tabs">
+     <button className={tab==='new'?'active':''} onClick={()=>{setTab('new');setError('')}}><Sparkles size={15}/> Новая глава</button>
+     <button className={tab==='continue'?'active':''} disabled={!chapter} onClick={()=>{setTab('continue');setError('')}}><Wand2 size={15}/> Продолжить текущую</button>
+    </div>
+    {tab==='new'?<div className="ai-form">
+     <label>О чём будет история?
+      <textarea rows={3} placeholder="Опиши идею: повод для разговора, кто они, настроение…" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
+     </label>
+     <div className="prompt-chips">{chips.map(chip=><button key={chip} type="button" className="chip" onClick={()=>setPrompt(chip)}>{chip}</button>)}</div>
+     <div className="form-row">
+      <label>Количество сообщений
+       <select value={count} onChange={e=>setCount(Number(e.target.value))}>
+        <option value={6}>6 сообщений (короткая сцена)</option>
+        <option value={10}>10 сообщений (стандартная страница)</option>
+        <option value={14}>14 сообщений (две страницы)</option>
+       </select>
+      </label>
+     </div>
+     <p className="ai-note"><Bot size={14}/> Gemini сам подберёт имена собеседников, цвета сообщений и создаст живой диалог.</p>
+    </div>:<div className="ai-form">
+     {chapter&&<div className="context-card">
+      <span>Текущие собеседники:</span>
+      <strong>{chapter.people.left.name} (слева) и {chapter.people.right.name} (справа)</strong>
+      <small>Глава «{chapter.title}», {chapter.messages.length} сообщений написано</small>
+     </div>}
+     <label>Куда повернуть сюжет? (необязательно)
+      <textarea rows={2} placeholder="Например: неожиданное признание, намёк на встречу, спор… (можно оставить пустым)" value={prompt} onChange={e=>setPrompt(e.target.value)}/>
+     </label>
+     <div className="form-row">
+      <label>Сколько реплик добавить
+       <select value={count} onChange={e=>setCount(Number(e.target.value))}>
+        <option value={4}>4 реплики</option>
+        <option value={6}>6 реплик</option>
+        <option value={8}>8 реплик</option>
+        <option value={12}>12 реплик</option>
+       </select>
+      </label>
+     </div>
+    </div>}
+    {error&&<div className="ai-error"><X size={15}/><span>{error}</span></div>}
+   </div>
+   <footer className="modal-footer">
+    <button className="text-button" disabled={loading} onClick={onClose}>Отмена</button>
+    <button className="primary ai-submit" disabled={loading||(!hasGeminiKey&&!apiKey.trim())} onClick={handleGenerate}>
+     {loading?<><RefreshCw size={15} className="spin"/> Gemini сочиняет…</>:<><Sparkles size={15}/> {tab==='new'?'Создать главу':'Продолжить историю'}</>}
+    </button>
+   </footer>
+  </div>
+ </div>;
+}
+function Editor({chapters,setChapters,onPublish,onPreview,onImport,onExport,busy,notify,saveStatus,hasGeminiKey,onGeminiKeySaved}){
  const [selected,setSelected]=useState(chapters[0]?.id);const chapter=chapters.find(c=>c.id===selected)||chapters[0];
  const [tab,setTab]=useState('messages'),[previewPage,setPreviewPage]=useState(0),[deleteId,setDeleteId]=useState(null);
+ const [showAi,setShowAi]=useState(false),[aiInitialTab,setAiInitialTab]=useState('new');
  const listRef=useRef(null);
  function change(patch){setChapters(prev=>prev.map(c=>c.id===chapter.id?{...c,...patch}:c))}
  function changeMessage(id,patch){change({messages:chapter.messages.map(m=>m.id===id?{...m,...patch}:m)})}
@@ -67,19 +164,25 @@ function Editor({chapters,setChapters,onPublish,onPreview,onImport,onExport,busy
  const pages=pagesOf(chapter),current=Math.min(previewPage,pages.length-1);
  const focusMessage=id=>setPreviewPage(pages.findIndex(page=>page.some(m=>m.id===id)));
  return <section className="editor">
-  <aside className="chapter-sidebar"><div className="sidebar-heading"><h2>Мои главы</h2><IconButton label="Новая глава" onClick={()=>{const next=newChapter();setChapters(prev=>[...prev,next]);setSelected(next.id);setPreviewPage(0)}}><Plus size={19}/></IconButton></div><div className="chapter-nav">{chapters.map((c,i)=><button key={c.id} className={chapter.id===c.id?'selected':''} onClick={()=>{setSelected(c.id);setPreviewPage(0);setDeleteId(null)}}><span>{String(i+1).padStart(2,'0')}</span><div><strong>{c.title||'Без названия'}</strong><small>{c.messages.length} сообщений</small></div></button>)}</div><div className="sidebar-footer"><button className="text-button" onClick={onImport}><FolderOpen size={16}/> Импорт истории</button><button className="text-button" onClick={onExport}><Download size={16}/> Сохранить файл</button></div></aside>
-  <div className="writing-area"><header className="editor-title"><div><span className={`save-status ${saveStatus==='error'?'error':''}`}>{saveStatus==='saved'?<Check size={13}/>:<Clock3 size={13}/>} {saveStatus==='saved'?'Сохранено на компьютере':saveStatus==='error'?'Ошибка сохранения':'Сохраняю…'}</span><input aria-label="Название главы" maxLength={200} value={chapter.title} onChange={e=>change({title:e.target.value})}/></div><button className="primary" onClick={()=>onPublish(chapter)} disabled={busy}><Upload size={16}/>{busy?'Публикую…':'Опубликовать'}</button></header>
+  <aside className="chapter-sidebar"><div className="sidebar-heading"><h2>Мои главы</h2><div className="sidebar-actions"><IconButton label="Написать главу с AI" onClick={()=>{setAiInitialTab('new');setShowAi(true)}}><Sparkles size={16}/></IconButton><IconButton label="Новая глава" onClick={()=>{const next=newChapter();setChapters(prev=>[...prev,next]);setSelected(next.id);setPreviewPage(0)}}><Plus size={19}/></IconButton></div></div><div className="chapter-nav">{chapters.map((c,i)=><button key={c.id} className={chapter.id===c.id?'selected':''} onClick={()=>{setSelected(c.id);setPreviewPage(0);setDeleteId(null)}}><span>{String(i+1).padStart(2,'0')}</span><div><strong>{c.title||'Без названия'}</strong><small>{c.messages.length} сообщений</small></div></button>)}</div><div className="sidebar-footer"><button className="text-button" onClick={onImport}><FolderOpen size={16}/> Импорт истории</button><button className="text-button" onClick={onExport}><Download size={16}/> Сохранить файл</button></div></aside>
+  <div className="writing-area"><header className="editor-title"><div><span className={`save-status ${saveStatus==='error'?'error':''}`}>{saveStatus==='saved'?<Check size={13}/>:<Clock3 size={13}/>} {saveStatus==='saved'?'Сохранено на компьютере':saveStatus==='error'?'Ошибка сохранения':'Сохраняю…'}</span><input aria-label="Название главы" maxLength={200} value={chapter.title} onChange={e=>change({title:e.target.value})}/></div><div className="editor-header-actions"><button type="button" className="secondary ai-button" onClick={()=>{setAiInitialTab(chapter?'continue':'new');setShowAi(true)}}><Sparkles size={14}/> AI-соавтор</button><button className="primary" onClick={()=>onPublish(chapter)} disabled={busy}><Upload size={16}/>{busy?'Публикую…':'Опубликовать'}</button></div></header>
    <div className="editor-tabs"><button className={tab==='messages'?'active':''} onClick={()=>setTab('messages')}><MessageCircle size={16}/> Переписка</button><button className={tab==='appearance'?'active':''} onClick={()=>setTab('appearance')}><ImagePlus size={16}/> Участники и вид</button><button className={tab==='schedule'?'active':''} onClick={()=>setTab('schedule')}><Clock3 size={16}/> Открытие главы</button></div>
    {tab==='messages'?<><div className="messages-hint"><span>Сообщения на странице</span><select aria-label="Сообщений на странице" value={chapter.pageSize} onChange={e=>change({pageSize:Number(e.target.value)})}>{Array.from({length:12},(_,i)=><option key={i} value={i+1}>{i+1}</option>)}</select><span className="hint-tail">Разделяй страницы на нужной реплике</span></div><div className="message-list" ref={listRef}>{chapter.messages.map((m,i)=>{const starts=pages.some(p=>p[0]?.id===m.id),pageIndex=pages.findIndex(p=>p.some(x=>x.id===m.id));return <React.Fragment key={m.id}>{starts&&<div className="page-divider"><span>Страница {pageIndex+1}</span><i/></div>}<div className={`message-editor ${m.side}`} onFocus={()=>focusMessage(m.id)}><div className="message-editor-head"><select aria-label={`Отправитель сообщения ${i+1}`} value={m.side} onChange={e=>changeMessage(m.id,{side:e.target.value})}><option value="left">← {chapter.people.left.name}</option><option value="right">{chapter.people.right.name} →</option></select><div className="message-actions"><IconButton label={`Перенести сообщение ${i+1} вверх`} disabled={i===0} onClick={()=>reorder(i,-1)}><ArrowUp size={13}/></IconButton><IconButton label={`Перенести сообщение ${i+1} вниз`} disabled={i===chapter.messages.length-1} onClick={()=>reorder(i,1)}><ArrowDown size={13}/></IconButton>{i>0&&<IconButton label={`Новая страница перед сообщением ${i+1}`} aria-pressed={!!m.breakBefore} onClick={()=>changeMessage(m.id,{breakBefore:!m.breakBefore})}><Scissors size={13}/></IconButton>}<IconButton label={`Удалить сообщение ${i+1}`} disabled={chapter.messages.length===1} onClick={()=>change({messages:chapter.messages.filter(x=>x.id!==m.id)})}><Trash2 size={13}/></IconButton></div></div><textarea aria-label={`Сообщение ${i+1}`} rows={Math.max(2,Math.min(5,Math.ceil(m.text.length/55)))} maxLength={5000} placeholder="Напиши реплику…" value={m.text} onChange={e=>changeMessage(m.id,{text:e.target.value})}/></div></React.Fragment>})}</div><div className="add-messages"><button onClick={()=>addMessage('left')}><Plus size={16}/>{chapter.people.left.name}</button><button onClick={()=>addMessage('right')}><Plus size={16}/>{chapter.people.right.name}</button></div></>:null}
    {tab==='appearance'&&<div className="editor-form"><label>Описание главы<textarea value={chapter.description} maxLength={2000} onChange={e=>change({description:e.target.value})} placeholder="Одна фраза, чтобы захотелось открыть" rows={2}/></label><div className="people-settings">{['left','right'].map(side=><section className="person-settings" key={side}><h3>{side==='left'?'Собеседник · слева':'Я · справа'}</h3><div className="avatar-upload"><Avatar person={chapter.people[side]} size="large"/><label className="upload-label"><ImagePlus size={15}/> Загрузить аватар<input type="file" accept="image/png,image/jpeg,image/webp" aria-label={`Аватар ${side==='left'?'слева':'справа'}`} onChange={async e=>{try{const avatar=await readAvatar(e.target.files[0]);change({people:{...chapter.people,[side]:{...chapter.people[side],avatar}}})}catch(error){notify(error.message,'error')}}}/></label>{chapter.people[side].avatar&&<IconButton label={`Убрать аватар ${side}`} onClick={()=>change({people:{...chapter.people,[side]:{...chapter.people[side],avatar:''}}})}><X size={15}/></IconButton>}</div><label>Имя<input aria-label={`Имя ${side==='left'?'слева':'справа'}`} maxLength={80} value={chapter.people[side].name} onChange={e=>change({people:{...chapter.people,[side]:{...chapter.people[side],name:e.target.value}}})}/></label><label className="color-field">Цвет сообщений<input aria-label={`Цвет ${side==='left'?'слева':'справа'}`} type="color" value={chapter.people[side].color} onChange={e=>change({people:{...chapter.people,[side]:{...chapter.people[side],color:e.target.value}}})}/></label></section>)}</div><label>Где показывать аватарки<select aria-label="Расположение аватарок" value={chapter.avatarMode} onChange={e=>change({avatarMode:e.target.value})}><option value="header">Только сверху — как на скриншоте</option><option value="messages">Рядом с сообщениями с обеих сторон</option><option value="both">Сверху и рядом с сообщениями</option></select></label><div className="delete-chapter">{deleteId===chapter.id?<><p>Убрать главу из редактора? Опубликованная версия останется доступной.</p><button className="danger" onClick={()=>{setChapters(prev=>prev.filter(c=>c.id!==chapter.id));setSelected(null);setDeleteId(null)}}>Да, убрать</button><button className="text-button" onClick={()=>setDeleteId(null)}>Отмена</button></>:<button className="text-button" onClick={()=>setDeleteId(chapter.id)}><Trash2 size={15}/> Убрать из редактора</button>}</div></div>}
    {tab==='schedule'&&<div className="editor-form schedule-form"><div className="schedule-symbol"><Clock3 size={33}/></div><h2>Пусть немного подождёт</h2><p>Опубликуй главу заранее. До выбранного момента читатель увидит конверт и обратный отсчёт.</p><label className="radio-line"><input type="radio" name="schedule" checked={!chapter.unlockAt} onChange={()=>change({unlockAt:''})}/> Открыть сразу после публикации</label><label className="radio-line"><input type="radio" name="schedule" checked={!!chapter.unlockAt} onChange={()=>change({unlockAt:new Date(Date.now()+3600_000).toISOString()})}/> Открыть в определённое время</label>{chapter.unlockAt&&<label>Дата и время на твоём компьютере<input aria-label="Дата открытия" type="datetime-local" value={new Date(Date.parse(chapter.unlockAt)-new Date(chapter.unlockAt).getTimezoneOffset()*60000).toISOString().slice(0,16)} onChange={e=>{if(e.target.value)change({unlockAt:new Date(e.target.value).toISOString()})}}/><small>{Intl.DateTimeFormat().resolvedOptions().timeZone}. У читателя время пересчитается автоматически.</small></label>}<div className="info-note">Таймер действует в приложении. Файлы истории на GitHub публичны.</div></div>}
   </div>
   <aside className="live-preview"><header><div><Eye size={16}/><strong>Так увидит читатель</strong></div><button className="text-button" onClick={()=>onPreview(chapter)}>Открыть</button></header><div className="preview-container"><ChatPage chapter={chapter} messages={pages[current]} page={current} total={pages.length} preview/></div><div className="preview-controls"><IconButton label="Предыдущая страница предпросмотра" disabled={current===0} onClick={()=>setPreviewPage(current-1)}><ChevronLeft size={18}/></IconButton><span>Страница {current+1} из {pages.length}</span><IconButton label="Следующая страница предпросмотра" disabled={current===pages.length-1} onClick={()=>setPreviewPage(current+1)}><ChevronRight size={18}/></IconButton></div></aside>
- </section>
+  <AiModal isOpen={showAi} onClose={()=>setShowAi(false)} initialTab={aiInitialTab} chapter={chapter} chapters={chapters} setChapters={setChapters} setSelected={id=>{setSelected(id);setPreviewPage(0)}} hasGeminiKey={hasGeminiKey} onGeminiKeySaved={onGeminiKeySaved} notify={notify}/>
+ </section>;
 }
 function SettingsPanel({data,onChange,notify,run,busy,update}){
- const [config,setConfig]=useState(data.channel),[token,setToken]=useState('');
- return <section className="settings-page"><h1>Всё на своих местах</h1><p className="intro">Истории появляются у читателя после публикации. Сервер обслуживает GitHub.</p><div className="settings-block"><h2><BookOpen size={20}/> Библиотека</h2><div className="settings-fields"><label>Аккаунт GitHub<input value={config.owner} onChange={e=>setConfig({...config,owner:e.target.value.trim()})} placeholder="username"/></label><label>Репозиторий<input value={config.repo} onChange={e=>setConfig({...config,repo:e.target.value.trim()})}/></label><label>Ветка<input value={config.branch} onChange={e=>setConfig({...config,branch:e.target.value.trim()})}/></label></div><button className="secondary" disabled={busy} onClick={()=>run(async()=>{await api.setChannel(config);onChange({...data,channel:config});notify('Канал сохранён. Теперь можно обновить главы.')})}>Подключить для чтения</button></div><div className="settings-block"><h2><PenLine size={20}/> Доступ автора <span className={`pill ${data.connected?'success':''}`}>{data.connected?'Подключён':'Не подключён'}</span></h2><p>Только автору нужен доступ к публикации. Ключ хранится зашифрованным на этом компьютере и не попадает в приложение читателя.</p><label>Ключ GitHub (не нужен, если вход уже сохранён в Git)<input type="password" autoComplete="off" value={token} onChange={e=>setToken(e.target.value)} placeholder="Fine-grained token: Contents — Read and write"/></label><p className="small-note">Для ключа выбери только этот репозиторий и разрешение Contents: Read and write.</p><div className="button-row"><button className="primary" disabled={busy} onClick={()=>run(async()=>{const result=await api.connect({token,config});setToken('');onChange({...data,channel:config,connected:true});notify(`Подключён аккаунт ${result.login}`)})}><Check size={16}/> Подключить автора</button>{data.connected&&<button className="text-button" onClick={()=>run(async()=>{await api.disconnect();onChange({...data,connected:false});notify('Доступ автора отключён')})}>Отключить</button>}</div></div><div className="settings-block"><h2><Download size={20}/> Обновления приложения</h2><p>Версия {data.version}. Новые главы загружаются отдельно; обновление программы нужно для новых функций.</p><button className="secondary" disabled={busy||update.status==='checking'} onClick={()=>run(async()=>{await api.checkUpdate()})}>Проверить обновление</button><p className="small-note">{update.status==='current'?'Установлена последняя версия.':update.status==='checking'?'Проверяем…':update.status==='error'?update.message:''}</p></div></section>
+ const [config,setConfig]=useState(data.channel),[token,setToken]=useState(''),[geminiKey,setGeminiKey]=useState('');
+ return <section className="settings-page"><h1>Всё на своих местах</h1><p className="intro">Истории появляются у читателя после публикации. Сервер обслуживает GitHub.</p>
+  <div className="settings-block"><h2><Sparkles size={20}/> Искусственный интеллект (Gemini) <span className={`pill ${data.hasGeminiKey?'success':''}`}>{data.hasGeminiKey?'Подключён':'Не подключён'}</span></h2><p>AI-соавтор помогает придумывать персонажей, писать новые главы и продолжать диалоги в редакторе (модель Gemini 3.8 Flash). Ключ хранится зашифрованным в Windows DPAPI.</p><label>API-ключ Gemini<input type="password" autoComplete="off" value={geminiKey} onChange={e=>setGeminiKey(e.target.value)} placeholder={data.hasGeminiKey?'•••••••••••••••• (ключ сохранён)':'Вставьте API-ключ Gemini (AIzaSy...)'}/></label><p className="small-note">Получить ключ можно бесплатно в <a href="https://aistudio.google.com/app/apikey" target="_blank" rel="noreferrer">Google AI Studio ↗</a>.</p><div className="button-row"><button className="primary" disabled={busy||!geminiKey.trim()} onClick={()=>run(async()=>{await api.setGeminiKey(geminiKey);setGeminiKey('');onChange({...data,hasGeminiKey:true});notify('API-ключ Gemini сохранён')})}><Check size={16}/> Сохранить ключ</button>{data.hasGeminiKey&&<button className="text-button" disabled={busy} onClick={()=>run(async()=>{await api.setGeminiKey('');onChange({...data,hasGeminiKey:false});notify('Ключ Gemini удалён')})}>Удалить ключ</button>}</div></div>
+  <div className="settings-block"><h2><BookOpen size={20}/> Библиотека</h2><div className="settings-fields"><label>Аккаунт GitHub<input value={config.owner} onChange={e=>setConfig({...config,owner:e.target.value.trim()})} placeholder="username"/></label><label>Репозиторий<input value={config.repo} onChange={e=>setConfig({...config,repo:e.target.value.trim()})}/></label><label>Ветка<input value={config.branch} onChange={e=>setConfig({...config,branch:e.target.value.trim()})}/></label></div><button className="secondary" disabled={busy} onClick={()=>run(async()=>{await api.setChannel(config);onChange({...data,channel:config});notify('Канал сохранён. Теперь можно обновить главы.')})}>Подключить для чтения</button></div>
+  <div className="settings-block"><h2><PenLine size={20}/> Доступ автора <span className={`pill ${data.connected?'success':''}`}>{data.connected?'Подключён':'Не подключён'}</span></h2><p>Только автору нужен доступ к публикации. Ключ хранится зашифрованным на этом компьютере и не попадает в приложение читателя.</p><label>Ключ GitHub (не нужен, если вход уже сохранён в Git)<input type="password" autoComplete="off" value={token} onChange={e=>setToken(e.target.value)} placeholder="Fine-grained token: Contents — Read and write"/></label><p className="small-note">Для ключа выбери только этот репозиторий и разрешение Contents: Read and write.</p><div className="button-row"><button className="primary" disabled={busy} onClick={()=>run(async()=>{const result=await api.connect({token,config});setToken('');onChange({...data,channel:config,connected:true});notify(`Подключён аккаунт ${result.login}`)})}><Check size={16}/> Подключить автора</button>{data.connected&&<button className="text-button" onClick={()=>run(async()=>{await api.disconnect();onChange({...data,connected:false});notify('Доступ автора отключён')})}>Отключить</button>}</div></div>
+  <div className="settings-block"><h2><Download size={20}/> Обновления приложения</h2><p>Версия {data.version}. Новые главы загружаются отдельно; обновление программы нужно для новых функций.</p><button className="secondary" disabled={busy||update.status==='checking'} onClick={()=>run(async()=>{await api.checkUpdate()})}>Проверить обновление</button><p className="small-note">{update.status==='current'?'Установлена последняя версия.':update.status==='checking'?'Проверяем…':update.status==='error'?update.message:''}</p></div>
+ </section>;
 }
 export default function App(){
  const [data,setData]=useState(null),[view,setView]=useState('library'),[selected,setSelected]=useState(null),[preview,setPreview]=useState(null),[chapters,setChapters]=useState([]),[now,setNow]=useState(Date.now()),[busy,setBusy]=useState(false),[toast,setToast]=useState(null),[saveStatus,setSaveStatus]=useState('saved'),[update,setUpdate]=useState({status:'idle'});
@@ -101,7 +204,7 @@ export default function App(){
    {preview&&view==='reader'&&<div className="preview-banner"><span><Eye size={15}/> Предпросмотр — глава ещё не опубликована</span><button onClick={()=>{setPreview(null);setView('editor')}}><X size={16}/> Вернуться в редактор</button></div>}
    {view==='library'&&<Library library={data.library} now={now} progress={data.progress} onOpen={id=>{setSelected(id);setView('reader')}} onEditor={()=>setView('editor')} onRefresh={refresh} busy={busy} hasChannel={!!data.channel.owner}/>}
    {view==='reader'&&chapter&&<Reader key={`${chapter.id}-${!!preview}`} chapter={chapter} now={now} progress={preview?0:data.progress[chapter.id]} onProgress={page=>{if(!preview)saveProgress(chapter.id,page)}} onBack={()=>{setView(preview?'editor':'library');setPreview(null)}} onNextChapter={()=>{if(preview){setView('editor');setPreview(null);return}const index=data.library.chapters.findIndex(c=>c.id===chapter.id);if(index<data.library.chapters.length-1)setSelected(data.library.chapters[index+1].id);else{setView('library');notify('Ты дочитала все открытые сообщения')}}}/>}
-   {view==='editor'&&<Editor chapters={chapters} setChapters={setChapters} saveStatus={saveStatus} busy={busy} notify={notify} onPublish={chapter=>run(async()=>{validateChapter(chapter);const library=await api.publish(chapter);setData(prev=>({...prev,library}));notify(isLocked(chapter)?'Глава опубликована. Таймер уже ждёт читателя.':'Глава опубликована — можно читать!')})} onPreview={chapter=>{setPreview(structuredClone(chapter));setView('reader')}} onImport={()=>run(async()=>{const imported=await api.import();if(imported){setChapters(prev=>{const map=new Map(prev.map(c=>[c.id,c]));for(const c of imported.chapters)map.set(c.id,c);return [...map.values()]});notify('История добавлена в редактор')}})} onExport={()=>run(async()=>{for(const c of chapters)validateChapter(c);if(await api.export({schema:1,chapters}))notify('История сохранена в файл')})}/>}
+   {view==='editor'&&<Editor chapters={chapters} setChapters={setChapters} saveStatus={saveStatus} busy={busy} notify={notify} hasGeminiKey={data.hasGeminiKey} onGeminiKeySaved={()=>setData(prev=>({...prev,hasGeminiKey:true}))} onPublish={chapter=>run(async()=>{validateChapter(chapter);const library=await api.publish(chapter);setData(prev=>({...prev,library}));notify(isLocked(chapter)?'Глава опубликована. Таймер уже ждёт читателя.':'Глава опубликована — можно читать!')})} onPreview={chapter=>{setPreview(structuredClone(chapter));setView('reader')}} onImport={()=>run(async()=>{const imported=await api.import();if(imported){setChapters(prev=>{const map=new Map(prev.map(c=>[c.id,c]));for(const c of imported.chapters)map.set(c.id,c);return [...map.values()]});notify('История добавлена в редактор')}})} onExport={()=>run(async()=>{for(const c of chapters)validateChapter(c);if(await api.export({schema:1,chapters}))notify('История сохранена в файл')})}/>}
    {view==='settings'&&<SettingsPanel data={data} onChange={setData} notify={notify} run={run} busy={busy} update={update}/>}
   </main>
   {['available','downloading','ready'].includes(update.status)&&<div className="update-banner"><Download size={18}/><span>{update.status==='available'?`Доступна версия ${update.version}`:update.status==='downloading'?`Скачиваем обновление: ${update.percent}%`:'Обновление готово'}</span>{update.status==='available'&&<button onClick={()=>run(()=>api.downloadUpdate())}>Скачать</button>}{update.status==='ready'&&<button onClick={()=>run(async()=>{await api.saveWorkspace({schema:1,chapters});await api.installUpdate()})}>Установить и перезапустить</button>}</div>}

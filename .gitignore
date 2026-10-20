@@ -6,3 +6,4 @@ test-results/
 *.log
 build-log.txt
 .jevrouter/
+.github/

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {demo,pagesOf,isLocked,validateChapter,validateLibrary,mergeChapter,textColor} from '../shared/story.mjs';
 import {publishChapter,checkChannel,fetchLibrary} from '../shared/github.mjs';
+import {generateNewChapter,continueChapter} from '../shared/gemini.mjs';
 const chapter=()=>structuredClone(demo.chapters[0]);
 test('Pages preserve every message, seven by default and manual cliffhanger boundaries',()=>{
  const c=chapter();assert.deepEqual(pagesOf(c).map(p=>p.length),[7,7]);
@@ -36,4 +37,14 @@ test('Reader fetches and validates remote content, rejecting malformed files',as
  const config={owner:'author',repo:'stories',branch:'main'};
  const value=await fetchLibrary(config,async()=>new Response(JSON.stringify(demo)));assert.equal(value.chapters[0].id,demo.chapters[0].id);
  await assert.rejects(()=>fetchLibrary(config,async()=>new Response('{"schema":999}')));
+});
+test('AI co-author generates valid chapters and continues dialogue',async()=>{
+ const fakeNew={title:'Встреча в метро',description:'Один зонт на двоих.',leftPerson:{name:'Максим',color:'#E9EBEF'},rightPerson:{name:'Лера',color:'#006DDB'},messages:[{side:'left',text:'Кажется, это твой зонт?'},{side:'right',text:'Смотря в какую сторону ты едешь.'}]};
+ const mockFetcher=async()=>new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify(fakeNew)}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});
+ const generated=await generateNewChapter({apiKey:'test-key',prompt:'про зонт',count:2,fetcher:mockFetcher});
+ assert.equal(generated.title,'Встреча в метро');assert.equal(generated.people.left.name,'Максим');assert.equal(generated.people.right.name,'Лера');assert.equal(generated.messages.length,2);validateChapter(generated);
+ const fakeContinue={messages:[{side:'left',text:'Я еду до кольцевой.'},{side:'right',text:'Тогда зонт точно мой.'}]};
+ const mockContinue=async()=>new Response(JSON.stringify({candidates:[{content:{parts:[{text:JSON.stringify(fakeContinue)}]}}]}),{status:200,headers:{'Content-Type':'application/json'}});
+ const added=await continueChapter({apiKey:'test-key',chapter:generated,prompt:'продолжение',fetcher:mockContinue});
+ assert.equal(added.length,2);assert.equal(added[0].text,'Я еду до кольцевой.');
 });
